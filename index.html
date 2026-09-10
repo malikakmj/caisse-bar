@@ -74,6 +74,7 @@ input:focus{border-color:#8db5ff;box-shadow:0 0 0 4px rgba(37,99,235,.10)}
 }
 .cats::-webkit-scrollbar{display:none}
 .cat{
+  touch-action:manipulation; -webkit-tap-highlight-color:transparent;
   background:#f3f6f9;color:#4f5d6a;border:1px solid #e0e6ec;white-space:nowrap;padding:10px 14px
 }
 .cat.active{background:var(--primary);color:#fff;border-color:var(--primary);box-shadow:0 5px 14px rgba(37,99,235,.22)}
@@ -148,7 +149,7 @@ tr:last-child td{border-bottom:0}
     <div class="status-wrap"><span id="sync" class="status-pill offline">● connexion…</span><span id="state" class="status-pill">Caisse fermée</span></div>
     </header>
 <main>
-<div class="notice"><b>Version sans installation :</b> fonctionne directement dans ton navigateur. Les données sont enregistrées sur cet appareil.</div>
+<div class="notice"><b>Version 2 :</b> filtres catégories corrigés pour iPhone. Les données sont enregistrées sur cet appareil.</div>
 <div class="tabs">
 <button class="tab active" data-page="caisse">🧾 Caisse</button>
 <button class="tab" data-page="journee">📊 Journée</button>
@@ -200,17 +201,12 @@ function render(){
   document.getElementById("cashActions").classList.toggle("hidden",!cash);
 
   let activeProducts=products.filter(p=>p.active!==false);
-  let cats=["Tous",...new Set(activeProducts.map(p=>p.category))];
-  document.getElementById("cats").innerHTML=cats.map(c=>`<button class="cat ${c===currentCat?'active':''}" data-category="${encodeURIComponent(c)}">${c}</button>`).join("");
-  document.querySelectorAll("#cats .cat").forEach(btn=>{
-    btn.addEventListener("click",()=>{
-      currentCat=decodeURIComponent(btn.dataset.category);
-      render();
-    });
-  });
+  let cats=["Tous",...new Set(activeProducts.map(p=>String(p.category||"").trim()).filter(Boolean))];
+  if(!cats.includes(currentCat)) currentCat="Tous";
+  document.getElementById("cats").innerHTML=cats.map((c,i)=>`<button type="button" class="cat ${c===currentCat?'active':''}" onclick="setCategory(${i})">${c}</button>`).join("");
 
   document.getElementById("products").innerHTML=activeProducts
-    .filter(p=>currentCat==="Tous"||p.category===currentCat)
+    .filter(p=>currentCat==="Tous"||String(p.category||"").trim()===currentCat)
     .map(p=>`<button class="product" onclick="add(${p.id})"><b>${p.name}</b><small>${p.category}</small><span class="price">${euro(p.price)}</span></button>`).join("");
 
   document.getElementById("cart").innerHTML=cart.length?
@@ -237,6 +233,14 @@ function render(){
     }</tbody></table>`:"<p class='muted'>Aucune vente aujourd'hui.</p>";
 
   document.getElementById("ptable").innerHTML=activeProducts.map(p=>`<tr><td>${p.name}</td><td>${p.category}</td><td>${euro(p.price)}</td><td><button class="danger" onclick="delProduct(${p.id})">Supprimer</button></td></tr>`).join("");
+}
+
+
+function setCategory(index){
+  const activeProducts=products.filter(p=>p.active!==false);
+  const cats=["Tous",...new Set(activeProducts.map(p=>String(p.category||"").trim()).filter(Boolean))];
+  currentCat=cats[index]||"Tous";
+  render();
 }
 
 function add(id){
