@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#18212b">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Le Reinitas — Caisse du bar V4.3</title>
+<title>Le Reinitas — Caisse du bar V4.4</title>
 
 <style>
 :root{
@@ -237,6 +237,35 @@ tr:last-child td{border-bottom:0}
   .quick-cash .exact{grid-column:span 2}
 }
 
+
+/* V4.4 — résumé de journée */
+.day-head{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px
+}
+.day-head h2{font-size:24px}
+.day-refresh{background:#fff;color:#334155;border:1px solid #dfe6ee;box-shadow:0 3px 10px rgba(20,31,43,.05)}
+.day-stats .stat small{display:block;color:#7b8794;font-weight:700;margin-top:6px}
+.day-stats .stat-ca:after{background:#7c3aed}
+.day-stats .stat-cash:after{background:#0f9f6e}
+.day-stats .stat-card:after{background:#2563eb}
+.day-extra{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px
+}
+.mini-stat{
+  background:#fff;border:1px solid #e4e9ef;border-radius:14px;padding:14px 16px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  box-shadow:0 4px 14px rgba(20,31,43,.04)
+}
+.mini-stat span{font-size:13px;color:#697887;font-weight:800}
+.mini-stat b{font-size:19px;color:#0f172a;white-space:nowrap}
+@media(max-width:650px){
+  .day-head{align-items:flex-end}
+  .day-refresh{padding:10px 12px}
+  .day-extra{grid-template-columns:1fr}
+  #journee .statgrid{grid-template-columns:1fr}
+  #journee .stat b{font-size:32px}
+}
+
 </style>
 </head>
 <body>
@@ -262,7 +291,34 @@ tr:last-child td{border-bottom:0}
 <div class="pay"><button class="cash" onclick="pay('Espèces')">💶 ESPÈCES</button><button class="card" onclick="pay('CB')">💳 CB</button></div>
 <div class="cart-actions"><button class="danger" style="width:100%" onclick="clearCart()">Vider le panier</button></div></div></div>
 </section>
-<section id="journee" class="hidden"><div class="statgrid"><div class="stat">CA total<b id="ca">0,00 €</b></div><div class="stat">Espèces<b id="especes">0,00 €</b></div><div class="stat">CB<b id="cb">0,00 €</b></div></div><div class="panel" style="margin-top:14px"><h2>Ventes du jour</h2><div id="sales"></div></div></section>
+<section id="journee" class="hidden">
+  <div class="day-head">
+    <div>
+      <div class="section-title">Résumé de la journée</div>
+      <h2 id="dayTitle" style="margin:4px 0 0">Aujourd’hui</h2>
+    </div>
+    <button class="day-refresh" type="button" onclick="render()">↻ Actualiser</button>
+  </div>
+
+  <div class="statgrid day-stats">
+    <div class="stat stat-ca">Chiffre d’affaires<b id="ca">0,00 €</b><small>Total des ventes</small></div>
+    <div class="stat stat-cash">💶 Espèces<b id="especes">0,00 €</b><small>Paiements en liquide</small></div>
+    <div class="stat stat-card">💳 Carte bancaire<b id="cb">0,00 €</b><small>Paiements CB</small></div>
+  </div>
+
+  <div class="day-extra">
+    <div class="mini-stat"><span>Nombre de ventes</span><b id="salesCount">0</b></div>
+    <div class="mini-stat"><span>Ticket moyen</span><b id="avgTicket">0,00 €</b></div>
+    <div class="mini-stat"><span>Espèces attendues en caisse</span><b id="cashExpected">0,00 €</b></div>
+  </div>
+
+  <div class="panel" style="margin-top:14px">
+    <div class="cash-head">
+      <div><div class="section-title">Détail</div><h2 style="margin:3px 0 0">Ventes du jour</h2></div>
+    </div>
+    <div id="sales"></div>
+  </div>
+</section>
 <section id="produits" class="hidden"><div class="panel"><h2>Ajouter un produit</h2><div class="form"><input id="pn" placeholder="Nom"><input id="pc" placeholder="Catégorie"><input id="pp" type="number" step="0.01" placeholder="Prix (€)"><button class="success" onclick="addProduct()">Ajouter</button></div><table><thead><tr><th>Produit</th><th>Catégorie</th><th>Prix</th><th></th></tr></thead><tbody id="ptable"></tbody></table></div></section>
 </main>
 <script>
@@ -288,7 +344,16 @@ function save(){
   localStorage.setItem("caisse_cash",JSON.stringify(cash));
 }
 
-function todayISO(){return new Date().toISOString().slice(0,10)}
+function localDateKey(d=new Date()){
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,"0");
+  const day=String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
+function saleDateKey(iso){
+  return localDateKey(new Date(iso));
+}
+function todayISO(){return localDateKey()}
 
 function render(){
   document.getElementById("sync").textContent="● local";
@@ -326,10 +391,23 @@ function render(){
   let cc=document.getElementById("cartCount");
   if(cc)cc.textContent=ncart+" article"+(ncart>1?"s":"");
 
-  let today=sales.filter(s=>s.created_at.slice(0,10)===todayISO());
+  let today=sales.filter(s=>saleDateKey(s.created_at)===todayISO());
   let total=today.reduce((s,x)=>s+x.total,0);
   let esp=today.filter(x=>x.method==="Espèces").reduce((s,x)=>s+x.total,0);
   let cb=today.filter(x=>x.method==="CB").reduce((s,x)=>s+x.total,0);
+  let count=today.length;
+  let average=count ? total/count : 0;
+  let fondValue=cash ? Number(cash.opening_float||cash.fond||cash.amount||0) : 0;
+  let expectedCash=fondValue+esp;
+
+  const dayTitle=document.getElementById("dayTitle");
+  if(dayTitle) dayTitle.textContent=new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  const salesCount=document.getElementById("salesCount");
+  if(salesCount) salesCount.textContent=String(count);
+  const avgTicket=document.getElementById("avgTicket");
+  if(avgTicket) avgTicket.textContent=euro(average);
+  const cashExpected=document.getElementById("cashExpected");
+  if(cashExpected) cashExpected.textContent=euro(expectedCash);
 
   document.getElementById("ca").textContent=euro(total);
   document.getElementById("especes").textContent=euro(esp);
@@ -469,7 +547,7 @@ function openCash(){
 
 function closeCash(){
   if(!cash)return;
-  let today=sales.filter(s=>s.created_at.slice(0,10)===todayISO());
+  let today=sales.filter(s=>saleDateKey(s.created_at)===todayISO());
   let esp=today.filter(x=>x.method==="Espèces").reduce((s,x)=>s+x.total,0);
   let expected=Math.round((Number(cash.opening_float)+esp)*100)/100;
   let actual=prompt("Montant réel des espèces présentes en caisse (€) :", expected.toFixed(2));
