@@ -134,6 +134,11 @@ tr:last-child td{border-bottom:0}
  .product{min-height:105px;padding:13px}.price{font-size:18px}.statgrid{grid-template-columns:1fr}
  .form{grid-template-columns:1fr 1fr}.form button{grid-column:1/-1}.pay{grid-template-columns:1fr 1fr}
  .cash,.card{min-height:62px}.total{font-size:30px}.tabs{width:100%}
+ .cats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible;gap:8px;padding:2px;margin:10px 0 12px}
+ .cat{width:100%;padding:11px 6px;font-size:14px}
+}
+@media(max-width:390px){
+ .cats{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 </style>
 </head>
@@ -196,7 +201,13 @@ function render(){
 
   let activeProducts=products.filter(p=>p.active!==false);
   let cats=["Tous",...new Set(activeProducts.map(p=>p.category))];
-  document.getElementById("cats").innerHTML=cats.map(c=>`<button class="cat ${c===currentCat?'active':''}" onclick="currentCat=${JSON.stringify(c)};render()">${c}</button>`).join("");
+  document.getElementById("cats").innerHTML=cats.map(c=>`<button class="cat ${c===currentCat?'active':''}" data-category="${encodeURIComponent(c)}">${c}</button>`).join("");
+  document.querySelectorAll("#cats .cat").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      currentCat=decodeURIComponent(btn.dataset.category);
+      render();
+    });
+  });
 
   document.getElementById("products").innerHTML=activeProducts
     .filter(p=>currentCat==="Tous"||p.category===currentCat)
