@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#18212b">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Le Reinitas — Caisse du bar V5.0</title>
+<title>Le Reinitas — Caisse du bar V5.1</title>
 
 <style>
 :root{
@@ -280,7 +280,7 @@ tr:last-child td{border-bottom:0}
 .cat{font-weight:900!important}
 
 
-/* V5.0 — modification des produits */
+/* V5.1 — modification des produits */
 .edit-btn{
   background:#e0f2fe!important;color:#075985!important;margin-right:6px!important;
   padding:8px 10px!important;border-radius:9px!important
@@ -307,7 +307,7 @@ tr:last-child td{border-bottom:0}
 .edit-actions button{min-height:50px;border-radius:12px;font-weight:900}
 
 
-/* V5.0 — couleurs des produits + favoris */
+/* V5.1 — couleurs des produits + favoris */
 .product:before{display:none!important}
 .product{border-width:2px!important}
 .product b,.product small,.product .price{color:inherit!important}
@@ -330,7 +330,7 @@ tr:last-child td{border-bottom:0}
     <div class="status-wrap"><span id="sync" class="status-pill offline">● connexion…</span><span id="state" class="status-pill">Caisse fermée</span></div>
     </header>
 <main>
-<div class="notice"><b>Version 4.7.1 :</b> favoris ⭐, fond de caisse, annulation de vente et couleurs corrigées sur les produits.</div>
+<div class="notice"><b>Version 5.1 :</b> sauvegarde et restauration de tes produits, couleurs et ventes.</div>
 <div class="tabs">
 <button class="tab active" data-page="caisse">🧾 Caisse</button>
 <button class="tab" data-page="journee">📊 Journée</button>
@@ -385,7 +385,18 @@ tr:last-child td{border-bottom:0}
   <input id="pcolor" type="color" value="#F4B942">
   <small>Si la catégorie existe déjà, sa couleur est reprise automatiquement. Tu peux la changer ici.</small>
 </div>
-<button class="success" onclick="addProduct()">Ajouter</button></div><table><thead><tr><th>Produit</th><th>Catégorie</th><th>Prix</th><th></th></tr></thead><tbody id="ptable"></tbody></table></div></section>
+<button class="success" onclick="addProduct()">Ajouter</button></div><table><thead><tr><th>Produit</th><th>Catégorie</th><th>Prix</th><th></th></tr></thead><tbody id="ptable"></tbody></table></div>
+<div class="panel" style="margin-top:14px">
+  <h2>💾 Sauvegarde / Restauration</h2>
+  <p class="muted">Sauvegarde régulièrement tes produits, catégories, couleurs et ventes dans un fichier.</p>
+  <div class="row">
+    <button class="primary" type="button" onclick="exportBackup()">💾 Sauvegarder mes données</button>
+    <button type="button" onclick="document.getElementById('backupFile').click()">📂 Restaurer une sauvegarde</button>
+    <input id="backupFile" type="file" accept=".json,application/json" style="display:none" onchange="importBackup(event)">
+  </div>
+  <p class="muted" id="backupStatus"></p>
+</div>
+</section>
 </main>
 <script>
 const defaults=[
@@ -437,6 +448,60 @@ function save(){
   localStorage.setItem("caisse_products",JSON.stringify(products));
   localStorage.setItem("caisse_sales",JSON.stringify(sales));
   localStorage.setItem("caisse_cash",JSON.stringify(cash));
+}
+
+
+function exportBackup(){
+  const data={
+    app:"Le Reinitas",
+    version:"5.1",
+    exported_at:new Date().toISOString(),
+    products,
+    sales,
+    cash,
+    categoryColors
+  };
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;
+  a.download="Le-Reinitas-sauvegarde-"+localDateKey()+".json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  const s=document.getElementById("backupStatus");
+  if(s)s.textContent="Sauvegarde créée. Garde ce fichier précieusement.";
+}
+
+function importBackup(event){
+  const file=event.target.files && event.target.files[0];
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const data=JSON.parse(reader.result);
+      if(!data || !Array.isArray(data.products) || !Array.isArray(data.sales)){
+        throw new Error("Format invalide");
+      }
+      if(!confirm("Restaurer cette sauvegarde ? Les données actuelles seront remplacées."))return;
+      products=data.products;
+      sales=data.sales;
+      cash=data.cash ?? null;
+      categoryColors=(data.categoryColors && typeof data.categoryColors==="object")?data.categoryColors:categoryColors;
+      saveCategoryColors();
+      save();
+      render();
+      const s=document.getElementById("backupStatus");
+      if(s)s.textContent="✅ Sauvegarde restaurée avec succès.";
+      alert("Sauvegarde restaurée.");
+    }catch(e){
+      alert("Ce fichier de sauvegarde n’est pas valide.");
+    }finally{
+      event.target.value="";
+    }
+  };
+  reader.readAsText(file);
 }
 
 function localDateKey(d=new Date()){
