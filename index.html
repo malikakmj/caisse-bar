@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#18212b">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Le Reinitas — Caisse du bar V5.1</title>
+<title>Le Reinitas — Caisse du bar V5.2</title>
 
 <style>
 :root{
@@ -280,7 +280,7 @@ tr:last-child td{border-bottom:0}
 .cat{font-weight:900!important}
 
 
-/* V5.1 — modification des produits */
+/* V5.2 — modification des produits */
 .edit-btn{
   background:#e0f2fe!important;color:#075985!important;margin-right:6px!important;
   padding:8px 10px!important;border-radius:9px!important
@@ -307,7 +307,7 @@ tr:last-child td{border-bottom:0}
 .edit-actions button{min-height:50px;border-radius:12px;font-weight:900}
 
 
-/* V5.1 — couleurs des produits + favoris */
+/* V5.2 — couleurs des produits + favoris */
 .product:before{display:none!important}
 .product{border-width:2px!important}
 .product b,.product small,.product .price{color:inherit!important}
@@ -386,6 +386,12 @@ tr:last-child td{border-bottom:0}
   <small>Si la catégorie existe déjà, sa couleur est reprise automatiquement. Tu peux la changer ici.</small>
 </div>
 <button class="success" onclick="addProduct()">Ajouter</button></div><table><thead><tr><th>Produit</th><th>Catégorie</th><th>Prix</th><th></th></tr></thead><tbody id="ptable"></tbody></table></div>
+
+<div class="panel" style="margin-top:14px">
+  <h2>↕️ Ordre des catégories</h2>
+  <p class="muted">Utilise les flèches pour placer les catégories dans l’ordre que tu veux sur la caisse.</p>
+  <div id="categoryOrderList"></div>
+</div>
 <div class="panel" style="margin-top:14px">
   <h2>💾 Sauvegarde / Restauration</h2>
   <p class="muted">Sauvegarde régulièrement tes produits, catégories, couleurs et ventes dans un fichier.</p>
@@ -421,6 +427,7 @@ let categoryColors=JSON.parse(localStorage.getItem("reinitas_category_colors")||
   "Alcools":"#A78BFA",
   "Cocktails":"#F472B6"
 };
+let categoryOrder=JSON.parse(localStorage.getItem("reinitas_category_order")||"[]");
 
 function saveCategoryColors(){
   localStorage.setItem("reinitas_category_colors",JSON.stringify(categoryColors));
@@ -459,7 +466,8 @@ function exportBackup(){
     products,
     sales,
     cash,
-    categoryColors
+    categoryColors,
+    categoryOrder
   };
   const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
   const url=URL.createObjectURL(blob);
@@ -489,7 +497,9 @@ function importBackup(event){
       sales=data.sales;
       cash=data.cash ?? null;
       categoryColors=(data.categoryColors && typeof data.categoryColors==="object")?data.categoryColors:categoryColors;
+      categoryOrder=Array.isArray(data.categoryOrder)?data.categoryOrder:categoryOrder;
       saveCategoryColors();
+      saveCategoryOrder();
       save();
       render();
       const s=document.getElementById("backupStatus");
@@ -515,8 +525,38 @@ function saleDateKey(iso){
 }
 function todayISO(){return localDateKey()}
 
+
+function saveCategoryOrder(){
+  localStorage.setItem("reinitas_category_order",JSON.stringify(categoryOrder));
+}
+function orderedCategories(){
+  const existing=[...new Set(products.filter(p=>p.active!==false).map(p=>String(p.category||"").trim()).filter(Boolean))];
+  categoryOrder=categoryOrder.filter(c=>existing.includes(c));
+  existing.forEach(c=>{if(!categoryOrder.includes(c))categoryOrder.push(c);});
+  saveCategoryOrder();
+  return categoryOrder.slice();
+}
+function moveCategory(cat,dir){
+  orderedCategories();
+  const i=categoryOrder.indexOf(cat), j=i+dir;
+  if(i<0||j<0||j>=categoryOrder.length)return;
+  [categoryOrder[i],categoryOrder[j]]=[categoryOrder[j],categoryOrder[i]];
+  saveCategoryOrder();
+  render();
+}
+function renderCategoryOrder(){
+  const box=document.getElementById("categoryOrderList");
+  if(!box)return;
+  const cats=orderedCategories();
+  box.innerHTML=cats.map((c,i)=>`<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #e5e7eb">
+    <b>${c}</b>
+    <button type="button" onclick="moveCategory(${JSON.stringify(c)},-1)" ${i===0?"disabled":""}>⬆️</button>
+    <button type="button" onclick="moveCategory(${JSON.stringify(c)},1)" ${i===cats.length-1?"disabled":""}>⬇️</button>
+  </div>`).join("");
+}
 function render(){
   refreshProductCategorySelect();
+  renderCategoryOrder();
   document.getElementById("sync").textContent="● local";
   document.getElementById("sync").className="status-pill online";
   document.getElementById("state").textContent=cash?"Caisse ouverte":"Caisse fermée";
@@ -524,7 +564,7 @@ function render(){
   document.getElementById("cashActions").classList.toggle("hidden",!cash);
 
   let activeProducts=products.filter(p=>p.active!==false);
-  let cats=["Tous",...(activeProducts.some(p=>p.favorite)?["⭐ Favoris"]:[]),...new Set(activeProducts.map(p=>String(p.category||"").trim()).filter(Boolean))];
+  let cats=["Tous",...(activeProducts.some(p=>p.favorite)?["⭐ Favoris"]:[]),...orderedCategories()];
   if(!cats.includes(currentCat)) currentCat="Tous";
   document.getElementById("cats").innerHTML=cats.map((c,i)=>{
     const col=colorForCategory(c);
@@ -611,7 +651,7 @@ function render(){
 
 function setCategory(index){
   const activeProducts=products.filter(p=>p.active!==false);
-  const cats=["Tous",...(activeProducts.some(p=>p.favorite)?["⭐ Favoris"]:[]),...new Set(activeProducts.map(p=>String(p.category||"").trim()).filter(Boolean))];
+  const cats=["Tous",...(activeProducts.some(p=>p.favorite)?["⭐ Favoris"]:[]),...orderedCategories()];
   currentCat=cats[index]||"Tous";
   render();
 }
@@ -848,7 +888,7 @@ function cancelSale(id){
 function refreshProductCategorySelect(){
   const sel=document.getElementById("pc");
   if(!sel)return;
-  const cats=[...new Set(products.filter(p=>p.active!==false).map(p=>String(p.category||"").trim()).filter(Boolean))];
+  const cats=orderedCategories();
   const current=sel.value;
   sel.innerHTML='<option value="">Choisir une catégorie…</option>'+
     cats.map(c=>`<option value="${c.replace(/"/g,"&quot;")}">${c}</option>`).join("")+
