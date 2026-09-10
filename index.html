@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#18212b">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Le Reinitas — Caisse du bar V4.4</title>
+<title>Le Reinitas — Caisse du bar V4.5</title>
 
 <style>
 :root{
@@ -266,6 +266,19 @@ tr:last-child td{border-bottom:0}
   #journee .stat b{font-size:32px}
 }
 
+
+/* V4.5 — couleurs personnalisables par catégorie */
+.product-color-box{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#f8fafc;
+  border:1px solid #e2e8f0;border-radius:12px;padding:10px 12px
+}
+.product-color-box label{font-weight:800;color:#334155}
+.product-color-box input[type="color"]{
+  width:50px;height:38px;padding:0;border:0;background:transparent;border-radius:8px
+}
+.product-color-box small{width:100%;color:#64748b;font-weight:600}
+.cat{font-weight:900!important}
+
 </style>
 </head>
 <body>
@@ -319,7 +332,16 @@ tr:last-child td{border-bottom:0}
     <div id="sales"></div>
   </div>
 </section>
-<section id="produits" class="hidden"><div class="panel"><h2>Ajouter un produit</h2><div class="form"><input id="pn" placeholder="Nom"><input id="pc" placeholder="Catégorie"><input id="pp" type="number" step="0.01" placeholder="Prix (€)"><button class="success" onclick="addProduct()">Ajouter</button></div><table><thead><tr><th>Produit</th><th>Catégorie</th><th>Prix</th><th></th></tr></thead><tbody id="ptable"></tbody></table></div></section>
+<section id="produits" class="hidden"><div class="panel"><h2>Ajouter un produit</h2><div class="form">
+<input id="pn" placeholder="Nom">
+<input id="pc" placeholder="Catégorie" oninput="syncProductColorFromCategory()">
+<input id="pp" type="number" step="0.01" placeholder="Prix (€)">
+<div class="product-color-box">
+  <label for="pcolor">Couleur de la catégorie</label>
+  <input id="pcolor" type="color" value="#F4B942">
+  <small>Si la catégorie existe déjà, sa couleur est reprise automatiquement. Tu peux la changer ici.</small>
+</div>
+<button class="success" onclick="addProduct()">Ajouter</button></div><table><thead><tr><th>Produit</th><th>Catégorie</th><th>Prix</th><th></th></tr></thead><tbody id="ptable"></tbody></table></div></section>
 </main>
 <script>
 const defaults=[
@@ -335,6 +357,34 @@ defaults.map((x,i)=>({id:i+1,name:x[0],category:x[1],price:x[2],active:true}));
 let sales=JSON.parse(localStorage.getItem("caisse_sales")||"[]");
 let cash=JSON.parse(localStorage.getItem("caisse_cash")||"null");
 let cart=[], currentCat="Tous";
+
+let categoryColors=JSON.parse(localStorage.getItem("reinitas_category_colors")||"null")||{
+  "Tous":"#334155",
+  "Bières":"#F4B942",
+  "Softs":"#60A5FA",
+  "Chaud":"#B45309",
+  "Alcools":"#A78BFA",
+  "Cocktails":"#F472B6"
+};
+
+function saveCategoryColors(){
+  localStorage.setItem("reinitas_category_colors",JSON.stringify(categoryColors));
+}
+function readableText(hex){
+  const h=(hex||"#334155").replace("#","");
+  if(h.length!==6)return "#fff";
+  const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);
+  return (0.299*r+0.587*g+0.114*b)>175 ? "#111827" : "#ffffff";
+}
+function colorForCategory(cat){
+  return categoryColors[cat]||"#64748b";
+}
+function syncProductColorFromCategory(){
+  const cat=(document.getElementById("pc")?.value||"").trim();
+  const picker=document.getElementById("pcolor");
+  if(picker && cat && categoryColors[cat]) picker.value=categoryColors[cat];
+}
+
 
 const euro=n=>Number(n||0).toLocaleString("fr-FR",{style:"currency",currency:"EUR"});
 
@@ -365,11 +415,18 @@ function render(){
   let activeProducts=products.filter(p=>p.active!==false);
   let cats=["Tous",...new Set(activeProducts.map(p=>String(p.category||"").trim()).filter(Boolean))];
   if(!cats.includes(currentCat)) currentCat="Tous";
-  document.getElementById("cats").innerHTML=cats.map((c,i)=>`<button type="button" class="cat ${c===currentCat?'active':''}" onclick="setCategory(${i})">${c}</button>`).join("");
+  document.getElementById("cats").innerHTML=cats.map((c,i)=>{
+    const col=colorForCategory(c);
+    const txt=readableText(col);
+    return `<button type="button" class="cat ${c===currentCat?'active':''}" style="background:${col};color:${txt};border-color:${col}" onclick="setCategory(${i})">${c}</button>`;
+  }).join("");
 
   document.getElementById("products").innerHTML=activeProducts
     .filter(p=>currentCat==="Tous"||String(p.category||"").trim()===currentCat)
-    .map(p=>`<button class="product" onclick="add(${p.id})"><b>${p.name}</b><small>${p.category}</small><span class="price">${euro(p.price)}</span></button>`).join("");
+    .map(p=>{
+      const col=colorForCategory(String(p.category||"").trim());
+      return `<button class="product" style="border-left:6px solid ${col}" onclick="add(${p.id})"><b>${p.name}</b><small>${p.category}</small><span class="price">${euro(p.price)}</span></button>`;
+    }).join("");
 
   document.getElementById("cart").innerHTML=cart.length?
     cart.map((x,i)=>`<div class="line">
@@ -564,6 +621,12 @@ function addProduct(){
   let category=document.getElementById("pc").value.trim()||"Autres";
   let price=Number(document.getElementById("pp").value);
   if(!name||isNaN(price)||price<0)return alert("Nom et prix requis.");
+  const chosenCategory=(document.getElementById("pc").value||"").trim();
+  const chosenColor=document.getElementById("pcolor")?.value||"#64748b";
+  if(chosenCategory){
+    categoryColors[chosenCategory]=chosenColor;
+    saveCategoryColors();
+  }
   products.push({id:Date.now(),name,category,price,active:true});
   document.getElementById("pn").value="";
   document.getElementById("pc").value="";
