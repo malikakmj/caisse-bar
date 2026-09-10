@@ -348,8 +348,7 @@ function pay(method){
 
   if(method==="Espèces"){
     let entered=prompt(
-      "Montant reçu en espèces (€) :
-Total à payer : "+euro(total),
+      "Montant reçu en espèces (€) :\nTotal à payer : "+euro(total),
       total.toFixed(2)
     );
     if(entered===null)return;
