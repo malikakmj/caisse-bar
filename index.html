@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#18212b">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Le Reinitas — Caisse du bar V4.5</title>
+<title>Le Reinitas — Caisse du bar V4.6</title>
 
 <style>
 :root{
@@ -279,6 +279,33 @@ tr:last-child td{border-bottom:0}
 .product-color-box small{width:100%;color:#64748b;font-weight:600}
 .cat{font-weight:900!important}
 
+
+/* V4.6 — modification des produits */
+.edit-btn{
+  background:#e0f2fe!important;color:#075985!important;margin-right:6px!important;
+  padding:8px 10px!important;border-radius:9px!important
+}
+.edit-modal-backdrop{
+  position:fixed;inset:0;background:rgba(15,23,42,.58);display:none;
+  align-items:flex-end;justify-content:center;z-index:10000;padding:14px
+}
+.edit-modal-backdrop.show{display:flex}
+.edit-modal{
+  width:min(560px,100%);background:#fff;border-radius:22px;padding:20px;
+  box-shadow:0 24px 70px rgba(0,0,0,.28)
+}
+.edit-modal h3{margin:0 0 14px;font-size:24px}
+.edit-grid{display:grid;gap:11px}
+.edit-grid label{font-size:13px;font-weight:900;color:#475569}
+.edit-grid input{
+  width:100%;box-sizing:border-box;border:1px solid #dbe3ec;border-radius:12px;
+  padding:12px;font-size:16px
+}
+.edit-color-row{display:flex;align-items:center;gap:10px}
+.edit-color-row input[type=color]{width:55px;height:42px;padding:0}
+.edit-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.edit-actions button{min-height:50px;border-radius:12px;font-weight:900}
+
 </style>
 </head>
 <body>
@@ -475,7 +502,16 @@ function render(){
       today.slice().reverse().map(s=>`<tr><td>${new Date(s.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</td><td>${s.items.map(i=>i.name+" × "+i.qty).join(", ")}</td><td>${s.method}</td><td>${euro(s.total)}</td></tr>`).join("")
     }</tbody></table>`:"<p class='muted'>Aucune vente aujourd'hui.</p>";
 
-  document.getElementById("ptable").innerHTML=activeProducts.map(p=>`<tr><td>${p.name}</td><td>${p.category}</td><td>${euro(p.price)}</td><td><button class="danger" onclick="delProduct(${p.id})">Supprimer</button></td></tr>`).join("");
+  document.getElementById("ptable").innerHTML=products.filter(p=>p.active!==false).map(p=>`
+    <tr>
+      <td>${p.name}</td>
+      <td>${p.category}</td>
+      <td>${euro(p.price)}</td>
+      <td>
+        <button class="edit-btn" type="button" onclick="openEditProduct(${p.id})">Modifier</button>
+        <button class="danger" type="button" onclick="delProduct(${p.id})">Supprimer</button>
+      </td>
+    </tr>`).join("");
 }
 
 
@@ -595,6 +631,59 @@ function confirmCashPayment(){
   recordPayment("Espèces", total, roundedReceived, change);
 }
 
+
+function openEditProduct(id){
+  const p=products.find(x=>x.id===id);
+  if(!p)return;
+  document.getElementById("editProductId").value=String(id);
+  document.getElementById("editProductName").value=p.name||"";
+  document.getElementById("editProductCategory").value=p.category||"";
+  document.getElementById("editProductPrice").value=Number(p.price||0).toFixed(2);
+  document.getElementById("editProductColor").value=colorForCategory(p.category);
+  document.getElementById("editProductBackdrop").classList.add("show");
+}
+
+function closeEditProduct(){
+  document.getElementById("editProductBackdrop").classList.remove("show");
+}
+
+function editBackdropClick(event){
+  if(event.target.id==="editProductBackdrop")closeEditProduct();
+}
+
+function syncEditProductColor(){
+  const cat=(document.getElementById("editProductCategory").value||"").trim();
+  if(cat && categoryColors[cat]){
+    document.getElementById("editProductColor").value=categoryColors[cat];
+  }
+}
+
+function saveEditedProduct(){
+  const id=Number(document.getElementById("editProductId").value);
+  const p=products.find(x=>x.id===id);
+  if(!p)return;
+
+  const name=(document.getElementById("editProductName").value||"").trim();
+  const category=(document.getElementById("editProductCategory").value||"").trim();
+  const price=Number(String(document.getElementById("editProductPrice").value).replace(",","."));
+  const color=document.getElementById("editProductColor").value;
+
+  if(!name || !category || !Number.isFinite(price) || price<0){
+    alert("Vérifie le nom, la catégorie et le prix.");
+    return;
+  }
+
+  p.name=name;
+  p.category=category;
+  p.price=Math.round(price*100)/100;
+  categoryColors[category]=color;
+  saveCategoryColors();
+  save();
+  closeEditProduct();
+  render();
+  alert("Produit modifié.");
+}
+
 function openCash(){
   let f=Number(document.getElementById("fond").value);
   if(isNaN(f)||f<0)return alert("Indique un fond de caisse.");
@@ -668,6 +757,34 @@ render();
     <div class="cash-modal-actions">
       <button class="cash-cancel" type="button" onclick="closeCashModal()">Annuler</button>
       <button class="cash-confirm" type="button" onclick="confirmCashPayment()">Valider</button>
+    </div>
+  </div>
+</div>
+
+
+<div id="editProductBackdrop" class="edit-modal-backdrop" onclick="editBackdropClick(event)">
+  <div class="edit-modal" role="dialog" aria-modal="true">
+    <h3>Modifier le produit</h3>
+    <input id="editProductId" type="hidden">
+    <div class="edit-grid">
+      <label>Nom du produit
+        <input id="editProductName" type="text" placeholder="Nom">
+      </label>
+      <label>Catégorie
+        <input id="editProductCategory" type="text" placeholder="Catégorie" oninput="syncEditProductColor()">
+      </label>
+      <label>Prix (€)
+        <input id="editProductPrice" type="number" inputmode="decimal" step="0.01" min="0">
+      </label>
+      <label>Couleur de la catégorie</label>
+      <div class="edit-color-row">
+        <input id="editProductColor" type="color" value="#64748b">
+        <span>Choisis la couleur souhaitée</span>
+      </div>
+    </div>
+    <div class="edit-actions">
+      <button type="button" class="danger" onclick="closeEditProduct()">Annuler</button>
+      <button type="button" class="primary" onclick="saveEditedProduct()">Enregistrer</button>
     </div>
   </div>
 </div>
