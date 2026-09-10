@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#18212b">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Le Reinitas — Caisse du bar</title>
+<title>Le Reinitas — Caisse du bar V4</title>
 
 <style>
 :root{
@@ -174,6 +174,34 @@ tr:last-child td{border-bottom:0}
   button { touch-action: manipulation; }
 }
 
+
+.qty-controls{
+  display:flex;align-items:center;gap:8px;justify-content:flex-end;flex-wrap:wrap
+}
+.qty-btn{
+  width:38px;height:38px;padding:0!important;border-radius:10px!important;
+  background:#eef2f6!important;color:#0f172a!important;font-size:20px!important;
+  display:grid;place-items:center
+}
+.qty-number{
+  min-width:34px;text-align:center;font-weight:900;font-size:16px
+}
+.line-main{min-width:0;flex:1}
+.line-name{font-weight:800;display:block}
+.line-price{display:block;color:#72808f;font-size:12px;margin-top:3px}
+.line-total{font-weight:900;white-space:nowrap}
+.cash-change-box{
+  margin:0 18px 14px;padding:14px;border-radius:14px;background:#ecfdf5;
+  border:1px solid #bbf7d0;color:#065f46;font-weight:800;display:none
+}
+.cash-change-box.show{display:block}
+.cash-change-box .big{font-size:24px;color:#064e3b;margin-top:4px}
+@media(max-width:650px){
+  .line{align-items:flex-start}
+  .line-total{width:100%;text-align:right}
+  .qty-controls{width:100%;justify-content:flex-end}
+}
+
 </style>
 </head>
 <body>
@@ -182,7 +210,7 @@ tr:last-child td{border-bottom:0}
     <div class="status-wrap"><span id="sync" class="status-pill offline">● connexion…</span><span id="state" class="status-pill">Caisse fermée</span></div>
     </header>
 <main>
-<div class="notice"><b>Version 2 :</b> filtres catégories corrigés pour iPhone. Les données sont enregistrées sur cet appareil.</div>
+<div class="notice"><b>Version 4 :</b> panier amélioré avec boutons + / − et calcul de monnaie pour les paiements en espèces.</div>
 <div class="tabs">
 <button class="tab active" data-page="caisse">🧾 Caisse</button>
 <button class="tab" data-page="journee">📊 Journée</button>
@@ -195,6 +223,7 @@ tr:last-child td{border-bottom:0}
 <div class="cats" id="cats" style="margin-top:12px"></div><div class="products" id="products"></div>
 </div>
 <div class="panel cart"><div class="cart-head"><h2>Panier</h2><span class="cart-count" id="cartCount">0 article</span></div><div id="cart"></div><div class="total-wrap"><div class="total-label"><span>Total à payer</span></div><div class="total" id="total">0,00 €</div></div>
+<div id="cashChangeBox" class="cash-change-box"></div>
 <div class="pay"><button class="cash" onclick="pay('Espèces')">💶 ESPÈCES</button><button class="card" onclick="pay('CB')">💳 CB</button></div>
 <div class="cart-actions"><button class="danger" style="width:100%" onclick="clearCart()">Vider le panier</button></div></div></div>
 </section>
@@ -243,7 +272,18 @@ function render(){
     .map(p=>`<button class="product" onclick="add(${p.id})"><b>${p.name}</b><small>${p.category}</small><span class="price">${euro(p.price)}</span></button>`).join("");
 
   document.getElementById("cart").innerHTML=cart.length?
-    cart.map((x,i)=>`<div class="line"><span>${x.name} × ${x.qty}</span><b>${euro(x.price*x.qty)} <button onclick="cart.splice(${i},1);render()">−</button></b></div>`).join("")
+    cart.map((x,i)=>`<div class="line">
+      <div class="line-main">
+        <span class="line-name">${x.name}</span>
+        <span class="line-price">${euro(x.price)} l’unité</span>
+      </div>
+      <div class="qty-controls">
+        <button class="qty-btn" type="button" onclick="changeQty(${i},-1)">−</button>
+        <span class="qty-number">${x.qty}</span>
+        <button class="qty-btn" type="button" onclick="changeQty(${i},1)">+</button>
+        <span class="line-total">${euro(x.price*x.qty)}</span>
+      </div>
+    </div>`).join("")
     :"<div class='muted'>Aucun article</div>";
 
   document.getElementById("total").textContent=euro(cart.reduce((s,x)=>s+x.price*x.qty,0));
@@ -277,29 +317,76 @@ function setCategory(index){
 }
 
 function add(id){
+  const box=document.getElementById("cashChangeBox");
+  if(box){box.classList.remove("show");box.innerHTML="";}
   if(!cash)return alert("Ouvre d'abord la caisse.");
   let p=products.find(x=>x.id===id),x=cart.find(x=>x.id===id);
   x?x.qty++:cart.push({...p,qty:1});
   render();
 }
 
-function clearCart(){cart=[];render()}
+function changeQty(index,delta){
+  if(!cart[index])return;
+  cart[index].qty += delta;
+  if(cart[index].qty<=0) cart.splice(index,1);
+  render();
+}
+
+function clearCart(){
+  cart=[];
+  const box=document.getElementById("cashChangeBox");
+  if(box){box.classList.remove("show");box.innerHTML="";}
+  render();
+}
 
 function pay(method){
   if(!cart.length)return;
   if(!cash)return alert("Ouvre d'abord la caisse.");
+
   let total=Math.round(cart.reduce((s,x)=>s+x.price*x.qty,0)*100)/100;
+  let received=null, change=null;
+
+  if(method==="Espèces"){
+    let entered=prompt(
+      "Montant reçu en espèces (€) :
+Total à payer : "+euro(total),
+      total.toFixed(2)
+    );
+    if(entered===null)return;
+    entered=Number(String(entered).replace(",","."));
+    if(isNaN(entered) || entered<total){
+      return alert("Le montant reçu doit être au moins égal au total.");
+    }
+    received=Math.round(entered*100)/100;
+    change=Math.round((received-total)*100)/100;
+  }
+
   sales.push({
     id:Date.now(),
     method,
     total,
+    received,
+    change,
     created_at:new Date().toISOString(),
     items:cart.map(x=>({product_id:x.id,name:x.name,price:x.price,qty:x.qty}))
   });
+
   cart=[];
   save();
   render();
-  alert("Vente enregistrée : "+euro(total)+" — "+method);
+
+  const box=document.getElementById("cashChangeBox");
+  if(method==="Espèces" && box){
+    box.innerHTML=`Reçu : ${euro(received)}<div class="big">À rendre : ${euro(change)}</div>`;
+    box.classList.add("show");
+  } else if(box){
+    box.classList.remove("show");
+    box.innerHTML="";
+  }
+
+  if(method==="CB"){
+    alert("Vente enregistrée : "+euro(total)+" — CB");
+  }
 }
 
 function openCash(){
