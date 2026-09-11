@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#18212b">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Le Reinitas — Caisse du bar V5.4</title>
+<title>Le Reinitas — Caisse du bar V5.5</title>
 
 <style>
 :root{
@@ -280,7 +280,7 @@ tr:last-child td{border-bottom:0}
 .cat{font-weight:900!important}
 
 
-/* V5.4 — modification des produits */
+/* V5.5 — modification des produits */
 .edit-btn{
   background:#e0f2fe!important;color:#075985!important;margin-right:6px!important;
   padding:8px 10px!important;border-radius:9px!important
@@ -307,7 +307,7 @@ tr:last-child td{border-bottom:0}
 .edit-actions button{min-height:50px;border-radius:12px;font-weight:900}
 
 
-/* V5.4 — couleurs des produits + favoris */
+/* V5.5 — couleurs des produits + favoris */
 .product:before{display:none!important}
 .product{border-width:2px!important}
 .product b,.product small,.product .price{color:inherit!important}
@@ -388,8 +388,8 @@ tr:last-child td{border-bottom:0}
 <button class="success" onclick="addProduct()">Ajouter</button></div><table><thead><tr><th>Produit</th><th>Catégorie</th><th>Prix</th><th></th></tr></thead><tbody id="ptable"></tbody></table></div>
 
 <div class="panel" style="margin-top:14px">
-  <h2>↕️ Ordre des produits par catégorie</h2>
-  <p class="muted">Les produits sont regroupés par catégorie. Utilise les flèches pour les ranger directement dans leur catégorie.</p>
+  <h2>☰ Ordre des produits par catégorie</h2>
+  <p class="muted">Maintiens un produit avec le doigt puis fais-le glisser à la place souhaitée dans sa catégorie.</p>
   <div id="productOrderList"></div>
 </div>
 <div class="panel" style="margin-top:14px">
@@ -594,34 +594,53 @@ function moveProduct(id,dir){
 }
 function renderProductOrder(){
   const box=document.getElementById("productOrderList"); if(!box)return;
-  const list=orderedProducts();
-  const cats=orderedCategories();
+  const list=orderedProducts(), cats=orderedCategories();
   box.innerHTML=cats.map(cat=>{
     const ps=list.filter(p=>String(p.category||"").trim()===cat);
     if(!ps.length)return "";
-    return `<div style="margin:14px 0 6px"><b>${cat}</b></div>`+
-      ps.map((p,i)=>`<div style="display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #e5e7eb">
-        <div>${p.name}</div>
-        <button type="button" class="prod-cat-move" data-id="${p.id}" data-dir="-1" ${i===0?"disabled":""}>⬆️</button>
-        <button type="button" class="prod-cat-move" data-id="${p.id}" data-dir="1" ${i===ps.length-1?"disabled":""}>⬇️</button>
-      </div>`).join("");
+    return `<div style="margin:16px 0 7px"><b>${cat}</b></div>
+      <div class="product-sort-zone" data-category="${encodeURIComponent(cat)}">
+      ${ps.map(p=>`<div class="product-sort-item" data-id="${p.id}" style="display:flex;align-items:center;gap:10px;padding:12px;margin:6px 0;border:1px solid #e5e7eb;border-radius:10px;background:#fff;touch-action:none">
+        <span style="font-size:22px">☰</span><b>${p.name}</b>
+      </div>`).join("")}</div>`;
   }).join("");
-  box.querySelectorAll(".prod-cat-move").forEach(b=>b.addEventListener("click",()=>{
-    const id=Number(b.dataset.id), dir=Number(b.dataset.dir);
-    orderedProducts();
-    const p=products.find(x=>x.id===id); if(!p)return;
-    const cat=String(p.category||"").trim();
-    const catIds=productOrder.filter(pid=>{
-      const q=products.find(x=>x.id===pid);
-      return q&&q.active!==false&&String(q.category||"").trim()===cat;
+
+  box.querySelectorAll(".product-sort-item").forEach(item=>{
+    let startY=0, dragging=false;
+    item.addEventListener("touchstart",e=>{
+      if(e.touches.length!==1)return;
+      startY=e.touches[0].clientY; dragging=true;
+      item.style.opacity=".65";
+    },{passive:true});
+    item.addEventListener("touchmove",e=>{
+      if(!dragging)return;
+      e.preventDefault();
+      const y=e.touches[0].clientY;
+      const zone=item.parentElement;
+      const others=[...zone.querySelectorAll(".product-sort-item:not([data-dragging])")].filter(x=>x!==item);
+      let target=null;
+      for(const el of others){
+        const r=el.getBoundingClientRect();
+        if(y<r.top+r.height/2){target=el;break;}
+      }
+      if(target) zone.insertBefore(item,target); else zone.appendChild(item);
+    },{passive:false});
+    item.addEventListener("touchend",()=>{
+      if(!dragging)return; dragging=false; item.style.opacity="";
+      saveProductOrderFromZones();
     });
-    const ci=catIds.indexOf(id), cj=ci+dir;
-    if(ci<0||cj<0||cj>=catIds.length)return;
-    const other=catIds[cj];
-    const a=productOrder.indexOf(id), z=productOrder.indexOf(other);
-    [productOrder[a],productOrder[z]]=[productOrder[z],productOrder[a]];
-    saveProductOrder(); render();
-  }));
+  });
+}
+function saveProductOrderFromZones(){
+  orderedProducts();
+  document.querySelectorAll(".product-sort-zone").forEach(zone=>{
+    const ids=[...zone.querySelectorAll(".product-sort-item")].map(x=>Number(x.dataset.id));
+    if(!ids.length)return;
+    const positions=ids.map(id=>productOrder.indexOf(id)).sort((a,b)=>a-b);
+    ids.forEach((id,i)=>{productOrder[positions[i]]=id;});
+  });
+  saveProductOrder();
+  render();
 }
 function render(){
   refreshProductCategorySelect();
