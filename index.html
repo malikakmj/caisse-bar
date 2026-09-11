@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#18212b">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Le Reinitas — Caisse du bar V5.5</title>
+<title>Le Reinitas — Caisse du bar V5.6</title>
 
 <style>
 :root{
@@ -280,7 +280,7 @@ tr:last-child td{border-bottom:0}
 .cat{font-weight:900!important}
 
 
-/* V5.5 — modification des produits */
+/* V5.6 — modification des produits */
 .edit-btn{
   background:#e0f2fe!important;color:#075985!important;margin-right:6px!important;
   padding:8px 10px!important;border-radius:9px!important
@@ -307,7 +307,7 @@ tr:last-child td{border-bottom:0}
 .edit-actions button{min-height:50px;border-radius:12px;font-weight:900}
 
 
-/* V5.5 — couleurs des produits + favoris */
+/* V5.6 — couleurs des produits + favoris */
 .product:before{display:none!important}
 .product{border-width:2px!important}
 .product b,.product small,.product .price{color:inherit!important}
@@ -356,6 +356,15 @@ tr:last-child td{border-bottom:0}
     <button class="day-refresh" type="button" onclick="render()">↻ Actualiser</button>
   </div>
 
+  <div class="panel" style="margin:14px 0">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button type="button" onclick="changeDay(-1)">◀️ Jour précédent</button>
+      <input id="historyDate" type="date" onchange="selectHistoryDate(this.value)" style="flex:1;min-width:150px">
+      <button type="button" onclick="changeDay(1)">Jour suivant ▶️</button>
+      <button type="button" onclick="goToday()">Aujourd’hui</button>
+    </div>
+  </div>
+
   <div class="statgrid day-stats">
     <div class="stat stat-ca">Chiffre d’affaires<b id="ca">0,00 €</b><small>Total des ventes</small></div>
     <div class="stat stat-cash">💶 Espèces<b id="especes">0,00 €</b><small>Paiements en liquide</small></div>
@@ -365,12 +374,12 @@ tr:last-child td{border-bottom:0}
   <div class="day-extra">
     <div class="mini-stat"><span>Nombre de ventes</span><b id="salesCount">0</b></div>
     <div class="mini-stat"><span>Ticket moyen</span><b id="avgTicket">0,00 €</b></div>
-    <div class="mini-stat"><span>Espèces attendues en caisse</span><b id="cashExpected">0,00 €</b></div>
+    <div class="mini-stat"><span id="cashExpectedLabel">Espèces attendues en caisse</span><b id="cashExpected">0,00 €</b></div>
   </div>
 
   <div class="panel" style="margin-top:14px">
     <div class="cash-head">
-      <div><div class="section-title">Détail</div><h2 style="margin:3px 0 0">Ventes du jour</h2></div>
+      <div><div class="section-title">Détail</div><h2 style="margin:3px 0 0">Ventes de la journée sélectionnée</h2></div>
     </div>
     <div id="sales"></div>
   </div>
@@ -533,6 +542,36 @@ function saleDateKey(iso){
   return localDateKey(new Date(iso));
 }
 function todayISO(){return localDateKey()}
+let selectedDay=todayISO();
+
+function dateFromKey(key){
+  const [y,m,d]=String(key).split("-").map(Number);
+  return new Date(y,m-1,d,12,0,0);
+}
+function dateKeyFromDate(d){
+  const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
+function selectHistoryDate(value){
+  if(!value)return;
+  selectedDay=value;
+  render();
+}
+function changeDay(delta){
+  const d=dateFromKey(selectedDay);
+  d.setDate(d.getDate()+delta);
+  selectedDay=dateKeyFromDate(d);
+  render();
+}
+function goToday(){
+  selectedDay=todayISO();
+  render();
+}
+function selectedDayLabel(){
+  const d=dateFromKey(selectedDay);
+  const label=d.toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  return selectedDay===todayISO() ? "Aujourd’hui — "+label : label;
+}
 
 
 function saveCategoryOrder(){
@@ -689,17 +728,21 @@ function render(){
   let cc=document.getElementById("cartCount");
   if(cc)cc.textContent=ncart+" article"+(ncart>1?"s":"");
 
-  let today=sales.filter(s=>saleDateKey(s.created_at)===todayISO());
+  let today=sales.filter(s=>saleDateKey(s.created_at)===selectedDay);
   let total=today.reduce((s,x)=>s+x.total,0);
   let esp=today.reduce((s,x)=>s+(x.method==="Espèces"?x.total:(x.method==="Mixte"?Number(x.cash_amount||0):0)),0);
   let cb=today.reduce((s,x)=>s+(x.method==="CB"?x.total:(x.method==="Mixte"?Number(x.card_amount||0):0)),0);
   let count=today.length;
   let average=count ? total/count : 0;
   let fondValue=cash ? Number(cash.opening_float||cash.fond||cash.amount||0) : 0;
-  let expectedCash=fondValue+esp;
+  let expectedCash=(selectedDay===todayISO()?fondValue:0)+esp;
 
   const dayTitle=document.getElementById("dayTitle");
-  if(dayTitle) dayTitle.textContent=new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+  if(dayTitle) dayTitle.textContent=selectedDayLabel();
+  const historyDate=document.getElementById("historyDate");
+  if(historyDate) historyDate.value=selectedDay;
+  const cashExpectedLabel=document.getElementById("cashExpectedLabel");
+  if(cashExpectedLabel) cashExpectedLabel.textContent=selectedDay===todayISO()?"Espèces attendues en caisse":"Espèces encaissées ce jour";
   const salesCount=document.getElementById("salesCount");
   if(salesCount) salesCount.textContent=String(count);
   const avgTicket=document.getElementById("avgTicket");
@@ -716,14 +759,14 @@ function render(){
       <h3>💳 Détail des ventes CB — ${euro(cb)}</h3>
       ${today.filter(s=>s.method==="CB"||s.method==="Mixte").length?`<table><thead><tr><th>Heure</th><th>Articles</th><th>Total</th><th></th></tr></thead><tbody>${
         today.filter(s=>s.method==="CB"||s.method==="Mixte").slice().reverse().map(s=>`<tr><td>${new Date(s.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</td><td>${s.items.map(i=>i.name+" × "+i.qty).join(", ")}${s.method==="Mixte"?" (Mixte)":""}</td><td>${euro(s.method==="Mixte"?s.card_amount:s.total)}</td><td><button class="cancel-sale" type="button" onclick="cancelSale(${s.id})">Annuler</button></td></tr>`).join("")
-      }</tbody></table>`:"<p class='muted'>Aucune vente CB aujourd’hui.</p>"}
+      }</tbody></table>`:"<p class='muted'>Aucune vente CB pour cette journée.</p>"}
     </div>
     <div class="panel">
       <h3>💶 Détail des ventes Espèces — ${euro(esp)}</h3>
       ${today.filter(s=>s.method==="Espèces"||s.method==="Mixte").length?`<table><thead><tr><th>Heure</th><th>Articles</th><th>Total</th><th></th></tr></thead><tbody>${
         today.filter(s=>s.method==="Espèces"||s.method==="Mixte").slice().reverse().map(s=>`<tr><td>${new Date(s.created_at).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</td><td>${s.items.map(i=>i.name+" × "+i.qty).join(", ")}${s.method==="Mixte"?" (Mixte)":""}</td><td>${euro(s.method==="Mixte"?s.cash_amount:s.total)}</td><td><button class="cancel-sale" type="button" onclick="cancelSale(${s.id})">Annuler</button></td></tr>`).join("")
-      }</tbody></table>`:"<p class='muted'>Aucune vente Espèces aujourd’hui.</p>"}
-    </div>`:"<p class='muted'>Aucune vente aujourd'hui.</p>";
+      }</tbody></table>`:"<p class='muted'>Aucune vente Espèces pour cette journée.</p>"}
+    </div>`:"<p class='muted'>Aucune vente pour cette journée.</p>";
 
   document.getElementById("ptable").innerHTML=products.filter(p=>p.active!==false).map(p=>`
     <tr>
