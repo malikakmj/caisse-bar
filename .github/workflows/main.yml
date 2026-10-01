@@ -36,7 +36,19 @@ jobs:
           npx cap init "Le Reinitas" "com.lereinitas.caisse" --web-dir=www
           npx cap add android
           npx cap sync android
+          
+      - name: Corriger dependances Kotlin
+        run: |
+          cat >> android/app/build.gradle <<'EOF'
 
+          configurations.all {
+              resolutionStrategy {
+                  force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+                  force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+                  force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+              }
+          }
+          EOF
       - name: Construire APK
         run: |
           cd android
