@@ -1,0 +1,45 @@
+name: Construire APK Le Reinitas
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Recuperer le projet
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Installer Capacitor
+        run: |
+          npm init -y
+          npm install @capacitor/core @capacitor/cli @capacitor/android
+
+      - name: Preparer le site
+        run: |
+          mkdir -p www
+          cp index.html www/index.html
+
+      - name: Creer Android
+        run: |
+          npx cap init "Le Reinitas" "com.lereinitas.caisse" --web-dir=www
+          npx cap add android
+          npx cap sync android
+
+      - name: Construire APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Sauvegarder APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Le-Reinitas-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
